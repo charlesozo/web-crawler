@@ -1,23 +1,39 @@
 const { JSDOM } = require('jsdom')
 const axios = require('axios')
-async function crawlPage(currentURL) {
+async function crawlPage(baseURL, currentURL, pages) {
+    const baseURlObj = new URL(baseURL)
+    const currentURLObj = new URL(currentURL)
+    if (baseURlObj.hostname !== currentURLObj.hostname) {
+        return pages
+    }
+    const normalizedCurrentURL = normalizeURL(currentURL)
+    if (pages[normalizedCurrentURL] > 0) {
+        pages[normalizedCurrentURL]++
+        return pages
+    }
+    pages[normalizedCurrentURL] = 1
     console.log(`actively crawling: ${currentURL}`)
     try {
         
         const resp = await axios.get(currentURL)
         if (resp.status > 399) {
             console.log(`error in fetch with status code: ${resp.status} on page: ${currentURL}`)
-            return
+            return pages
         }
         const contentType = resp.headers.get("content-type")
         if (!contentType.includes("text/html")) { 
             console.log(`non html response,content type: ${contentType}, on page: ${currentURL}`)
-            return
+            return pages
         }
-        console.log( resp.data)
+        const htmlBody = await resp.data
+        const nextURLS = getURLsFromHTML(htmlBody, baseURL)
+        for (const nextUrl of nextURLS) { 
+            pages = await crawlPage(baseURL, nextUrl, pages)
+        }
     } catch (error) {
         console.log(`error in fetch: ${error.message}, on page: ${currentURL}`)
     }
+    return pages
 }
 function getURLsFromHTML(htmlBody, baseURL) {
     const urls = []
